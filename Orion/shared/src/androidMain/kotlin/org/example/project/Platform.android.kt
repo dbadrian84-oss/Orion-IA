@@ -234,6 +234,19 @@ actual fun getPairedBluetoothDevices(): List<String> {
     }
 }
 
+actual fun getCurrentWifiSsid(): String? {
+    val ctx = appContext ?: return null
+    return try {
+        val wifiManager =
+            ctx.applicationContext.getSystemService(Context.WIFI_SERVICE)
+                as? android.net.wifi.WifiManager
+        val rawSsid = wifiManager?.connectionInfo?.ssid
+        rawSsid?.removeSurrounding("\"")?.takeIf { it.isNotBlank() && it != "<unknown ssid>" }
+    } catch (e: Exception) {
+        null
+    }
+}
+
 actual fun canDrawOverlays(): Boolean {
     val context = appContext ?: return false
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -261,7 +274,10 @@ actual fun openOverlaySettings() {
 
 actual fun syncHotwordServiceState(alwaysListening: Boolean, hasEventRules: Boolean) {
     val context = appContext ?: return
-    val intent = Intent(context, org.example.project.service.OrionHotwordService::class.java)
+    val intent =
+        Intent().apply {
+            setClassName(context.packageName, "org.example.project.service.OrionHotwordService")
+        }
     if (alwaysListening || hasEventRules) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)

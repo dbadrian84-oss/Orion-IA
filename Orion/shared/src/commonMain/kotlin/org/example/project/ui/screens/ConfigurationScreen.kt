@@ -12,6 +12,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -587,7 +591,7 @@ private fun SystemSubScreen(onBack: () -> Unit) {
             hasAssistant = org.example.project.isAssistantRoleGranted()
             hasBattery = org.example.project.isBatteryOptimizationIgnored()
             hasAppPerms = org.example.project.hasPermission("android.permission.RECORD_AUDIO")
-            hasOverlay = org.example.project.isOverlayPermissionGranted()
+            hasOverlay = org.example.project.canDrawOverlays()
             kotlinx.coroutines.delay(1000)
         }
     }
@@ -1266,11 +1270,16 @@ internal fun EventsSubScreen(settingsManager: SettingsManager, onBack: () -> Uni
                             ?: org.example.project.model.EventType.BLUETOOTH_CONNECTED
                     val effectiveMatch =
                         rule.startCondition?.matchValue ?: rule.stopCondition?.matchValue ?: ""
+
                     val typeLabel =
                         when (effectiveType) {
                             org.example.project.model.EventType.BLUETOOTH_CONNECTED ->
                                 "🔵 Bluetooth"
+                            org.example.project.model.EventType.BLUETOOTH_DISCONNECTED ->
+                                "🔵 Bluetooth desconectado"
                             org.example.project.model.EventType.WIFI_CONNECTED -> "📶 WiFi"
+                            org.example.project.model.EventType.WIFI_DISCONNECTED ->
+                                "📶 WiFi desconectado"
                             org.example.project.model.EventType.POWER_CONNECTED ->
                                 "⚡ Cargador conectado"
                             org.example.project.model.EventType.POWER_DISCONNECTED ->
@@ -1281,6 +1290,7 @@ internal fun EventsSubScreen(settingsManager: SettingsManager, onBack: () -> Uni
                             org.example.project.model.EventType.AIRPLANE_MODE_OFF ->
                                 "📴 Modo avión desact."
                         }
+
                     Row(
                         modifier =
                             Modifier.fillMaxWidth()
@@ -1401,6 +1411,7 @@ internal fun EventsSubScreen(settingsManager: SettingsManager, onBack: () -> Uni
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EventCreationDialog(
     initial: org.example.project.model.EventRule?,
@@ -1414,6 +1425,25 @@ private fun EventCreationDialog(
         )
     }
     var matchValue by remember { mutableStateOf(initial?.startCondition?.matchValue ?: "") }
+    var expanded by remember { mutableStateOf(false) }
+
+    // Las opciones disponibles dependen del tipo de evento seleccionado.
+    val options =
+        remember(selectedType) {
+            when (selectedType) {
+                org.example.project.model.EventType.BLUETOOTH_CONNECTED ->
+                    org.example.project.getPairedBluetoothDevices()
+                org.example.project.model.EventType.WIFI_CONNECTED ->
+                    org.example.project.getCurrentWifiSsid()?.let { listOf(it) } ?: emptyList()
+                else -> emptyList()
+            }
+        }
+
+    // Si cambias de tipo de evento, se limpia el valor seleccionado anterior.
+    LaunchedEffect(selectedType) {
+        matchValue = ""
+        expanded = false
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1500,27 +1530,69 @@ private fun EventCreationDialog(
                     val hint =
                         when (selectedType) {
                             org.example.project.model.EventType.BLUETOOTH_CONNECTED ->
-                                "Nombre exacto del dispositivo BT (ej. 'Galaxy Buds')"
+                                "Selecciona el dispositivo Bluetooth"
                             org.example.project.model.EventType.WIFI_CONNECTED ->
-                                "Nombre exacto de la red WiFi (ej. 'Mi Casa 5G')"
+                                "Selecciona la red WiFi (la conectada ahora)"
                             else -> ""
                         }
-                    OutlinedTextField(
-                        value = matchValue,
-                        onValueChange = { matchValue = it },
-                        label = { Text(hint) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors =
-                            OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = NeonBlue,
-                                unfocusedBorderColor = NeonBlue.copy(alpha = 0.3f),
-                                focusedLabelColor = NeonBlue,
-                                cursorColor = NeonBlue,
-                                focusedTextColor = Color(0xFFE0E0F8),
-                                unfocusedTextColor = Color(0xFFE0E0F8),
-                            ),
-                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = matchValue,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(hint) },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                            },
+                            modifier =
+                                Modifier.fillMaxWidth()
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                            colors =
+                                OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = NeonBlue,
+                                    unfocusedBorderColor = NeonBlue.copy(alpha = 0.3f),
+                                    focusedLabelColor = NeonBlue,
+                                    cursorColor = NeonBlue,
+                                    focusedTextColor = Color(0xFFE0E0F8),
+                                    unfocusedTextColor = Color(0xFFE0E0F8),
+                                ),
+                        )
+                        // CAMBIO: ExposedDropdownMenu -> DropdownMenu
+                        // (ExposedDropdownMenu no está disponible en esta versión
+                        // de material3 para Compose Multiplatform)
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                            if (options.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (
+                                                selectedType ==
+                                                    org.example.project.model.EventType
+                                                        .BLUETOOTH_CONNECTED
+                                            )
+                                                "No hay dispositivos emparejados"
+                                            else "No estás conectado a ninguna red WiFi"
+                                        )
+                                    },
+                                    onClick = {},
+                                    enabled = false,
+                                )
+                            }
+                            options.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        matchValue = option
+                                        expanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },

@@ -278,13 +278,17 @@ actual fun syncHotwordServiceState(alwaysListening: Boolean, hasEventRules: Bool
         Intent().apply {
             setClassName(context.packageName, "org.example.project.service.OrionHotwordService")
         }
-    if (alwaysListening || hasEventRules) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
+    try {
+        if (alwaysListening || hasEventRules) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         } else {
-            context.startService(intent)
+            context.stopService(intent)
         }
-    } else {
-        context.stopService(intent)
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
 }

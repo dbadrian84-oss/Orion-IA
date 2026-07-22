@@ -85,8 +85,22 @@ class OrionHotwordService : Service() {
             return START_NOT_STICKY
         }
 
-        startForeground(NOTIF_ID, buildNotification())
-        startHotwordDetection()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIF_ID,
+                    buildNotification(),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                )
+            } else {
+                startForeground(NOTIF_ID, buildNotification())
+            }
+            startHotwordDetection()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            stopSelf()
+            return START_NOT_STICKY
+        }
         return START_STICKY
     }
 
